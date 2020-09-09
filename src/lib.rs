@@ -253,8 +253,10 @@ impl WasmMt {
         } else {
             let ab_init = Self::create_ab_init(&self.pkg_js_uri).await?;
             self.set_ab_init(ab_init);
-
-            self.pkg_js_uri.replace(".js", "_bg.wasm")
+            let mut splitted = self.pkg_js_uri.rsplitn(2, "/");
+            let file_name = splitted.next().unwrap();
+            let prefix = splitted.next().unwrap();
+            format!("{}/{}_bg.wasm", prefix, file_name.split(".").next().unwrap())
         };
 
         if !pkg_wasm_uri.ends_with("_bg.wasm") {

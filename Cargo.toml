@@ -12,12 +12,7 @@ description = """
 A multithreading library for Rust and WebAssembly.
 """
 edition = "2018"
-exclude = [
-    "Makefile",
-    "header.md",
-    "examples/*",
-    "tests/*",
-]
+exclude = ["Makefile", "header.md", "examples/*", "tests/*"]
 
 [lib]
 test = false
@@ -30,7 +25,7 @@ js-sys = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
 serde_traitobject = "0.2"
-bincode = "1.2"
+bincode = "1.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 uuid = { version = "0.8", features = ["wasm-bindgen", "v4"] }
@@ -56,12 +51,11 @@ members = [
   "examples/executors",
   "examples/parallel",
   "examples/fib",
-  "tests/crates/node",  # WIP: add NodeJS compatibility in atw.rs
+  "tests/crates/node", # WIP: add NodeJS compatibility in atw.rs
   "tests/crates/web",
   "crates/pool",
   "crates/pool/examples/pool_exec",
-  "crates/pool/examples/http",
-#  "crates/pool/tests/crates/node",  # WIP
+  "crates/pool/examples/http", #  "crates/pool/tests/crates/node",  # WIP
   "crates/pool/tests/crates/web",
 ]
 

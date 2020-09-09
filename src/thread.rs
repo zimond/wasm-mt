@@ -42,9 +42,8 @@ impl Thread {
         const instantiate = async (abInit, abWasm) => {
             // console.log('abInit:', abInit);
             const initJs = new TextDecoder().decode(abInit);
-            const init = (new Function(initJs)).call(null);
-            const wbg = init();
-            const wasm = await wbg(abWasm);
+            const wbg = (new Function(initJs)).call(null)();
+            const wasm = await wbg.default(abWasm);
             // console.log('wbg:', wbg);
             // console.log('wasm:', wasm);
             return { wbg, wasm };
