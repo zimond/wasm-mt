@@ -81,22 +81,22 @@
 #![feature(trait_alias)]
 #![feature(async_closure)]
 
-pub use wasm_mt;
-use wasm_mt::{debug_ln, WasmMt, Thread, MtClosure, MtAsyncClosure};
 use js_sys::ArrayBuffer;
+pub use wasm_mt;
+use wasm_mt::{debug_ln, MtAsyncClosure, MtClosure, Thread, WasmMt};
 
 pub mod prelude;
 mod resolver;
 use resolver::Resolver;
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 type ResultJJ = Result<JsValue, JsValue>;
 
-pub trait PoolCallback = FnOnce(ResultJJ,) -> () + 'static;
+pub trait PoolCallback = FnOnce(ResultJJ) -> () + 'static;
 
 struct ThreadPoolInner {
     size: usize,
@@ -133,22 +133,36 @@ impl ThreadPoolInner {
         Ok(())
     }
 
-    async fn execute<F>(&self, clos: F) -> ResultJJ where F: MtClosure {
+    async fn execute<F>(&self, clos: F) -> ResultJJ
+    where
+        F: MtClosure,
+    {
         let threads = self.threads.borrow();
         let pth = self.resolver.resolve_runnable(&threads).await?;
 
         let result = pth.exec(clos).await;
-        debug_ln!("pth {} done with result: {:?}", pth.get_id().unwrap(), result);
+        debug_ln!(
+            "pth {} done with result: {:?}",
+            pth.get_id().unwrap(),
+            result
+        );
         self.resolver.notify_job_complete(pth);
         result
     }
 
-    async fn execute_async<F, T>(&self, aclos: F) -> ResultJJ where F: MtAsyncClosure<T> {
+    async fn execute_async<F, T>(&self, aclos: F) -> ResultJJ
+    where
+        F: MtAsyncClosure<T>,
+    {
         let threads = self.threads.borrow();
         let pth = self.resolver.resolve_runnable(&threads).await?;
 
         let result = pth.exec_async(aclos).await;
-        debug_ln!("pth {} done with result: {:?}", pth.get_id().unwrap(), result);
+        debug_ln!(
+            "pth {} done with result: {:?}",
+            pth.get_id().unwrap(),
+            result
+        );
         self.resolver.notify_job_complete(pth);
         result
     }
@@ -162,7 +176,11 @@ impl ThreadPoolInner {
         } else {
             pth.exec_js(js).await
         };
-        debug_ln!("pth {} done with result: {:?}", pth.get_id().unwrap(), result);
+        debug_ln!(
+            "pth {} done with result: {:?}",
+            pth.get_id().unwrap(),
+            result
+        );
         self.resolver.notify_job_complete(pth);
         result
     }
@@ -184,22 +202,32 @@ macro_rules! pool_exec {
 
 #[macro_export]
 macro_rules! pool_exec_js {
-    ($pool:expr, $str:expr) => (($pool).exec_js($str));
-    ($pool:expr, $str:expr, $cb:expr) => (($pool).exec_js_with_cb($str, $cb));
+    ($pool:expr, $str:expr) => {
+        ($pool).exec_js($str)
+    };
+    ($pool:expr, $str:expr, $cb:expr) => {
+        ($pool).exec_js_with_cb($str, $cb)
+    };
 }
 
 #[macro_export]
 macro_rules! pool_exec_js_async {
-    ($pool:expr, $str:expr) => (($pool).exec_js_async($str));
-    ($pool:expr, $str:expr, $cb:expr) => (($pool).exec_js_async_with_cb($str, $cb));
+    ($pool:expr, $str:expr) => {
+        ($pool).exec_js_async($str)
+    };
+    ($pool:expr, $str:expr, $cb:expr) => {
+        ($pool).exec_js_async_with_cb($str, $cb)
+    };
 }
-
 
 pub struct ThreadPool(Rc<ThreadPoolInner>);
 
 impl Drop for ThreadPool {
     fn drop(&mut self) {
-        debug_ln!("[drop] ThreadPool::drop(): sc: {}", Rc::strong_count(&self.0));
+        debug_ln!(
+            "[drop] ThreadPool::drop(): sc: {}",
+            Rc::strong_count(&self.0)
+        );
         self.0.drop_inner();
     }
 }
@@ -229,21 +257,40 @@ impl ThreadPool {
 
     fn drop_cb_result(_: ResultJJ) {}
 
-    pub fn exec<F>(&self, job: F) where F: MtClosure {
+    pub fn exec<F>(&self, job: F)
+    where
+        F: MtClosure,
+    {
         self.exec_with_cb(job, Self::drop_cb_result);
     }
-    pub fn exec_async<F, T>(&self, job: F) where F: MtAsyncClosure<T> {
+    pub fn exec_async<F, T>(&self, job: F)
+    where
+        F: MtAsyncClosure<T>,
+    {
         self.exec_async_with_cb(job, Self::drop_cb_result);
     }
-    pub fn exec_with_cb<F, G>(&self, job: F, cb: G) where
-    F: MtClosure, G: PoolCallback {
+    pub async fn exec_await<F, T>(&self, job: F) -> ResultJJ
+    where
+        F: MtAsyncClosure<T>,
+    {
+        let pool_inner = self.0.clone();
+        pool_inner.execute_async(job).await
+    }
+    pub fn exec_with_cb<F, G>(&self, job: F, cb: G)
+    where
+        F: MtClosure,
+        G: PoolCallback,
+    {
         let pool_inner = self.0.clone();
         spawn_local(async move {
             cb(pool_inner.execute(job).await);
         });
     }
-    pub fn exec_async_with_cb<F, T, G>(&self, job: F, cb: G) where
-    F: MtAsyncClosure<T>, G: PoolCallback {
+    pub fn exec_async_with_cb<F, T, G>(&self, job: F, cb: G)
+    where
+        F: MtAsyncClosure<T>,
+        G: PoolCallback,
+    {
         let pool_inner = self.0.clone();
         spawn_local(async move {
             cb(pool_inner.execute_async(job).await);
@@ -256,13 +303,22 @@ impl ThreadPool {
     pub fn exec_js_async(&self, js: &str) {
         self.exec_js_inner(js, true, Self::drop_cb_result);
     }
-    pub fn exec_js_with_cb<G>(&self, js: &str, cb: G) where G: PoolCallback {
+    pub fn exec_js_with_cb<G>(&self, js: &str, cb: G)
+    where
+        G: PoolCallback,
+    {
         self.exec_js_inner(js, false, cb);
     }
-    pub fn exec_js_async_with_cb<G>(&self, js: &str, cb: G) where G: PoolCallback {
+    pub fn exec_js_async_with_cb<G>(&self, js: &str, cb: G)
+    where
+        G: PoolCallback,
+    {
         self.exec_js_inner(js, true, cb);
     }
-    fn exec_js_inner<G>(&self, js: &str, is_async: bool, cb: G) where G: PoolCallback {
+    fn exec_js_inner<G>(&self, js: &str, is_async: bool, cb: G)
+    where
+        G: PoolCallback,
+    {
         let pool_inner = self.0.clone();
         let js = js.to_string();
         spawn_local(async move {
